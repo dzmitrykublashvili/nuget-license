@@ -11,6 +11,7 @@ namespace NugetUtility
         public static async Task<int> Main(string[] args)
         {
             var result = Parser.Default.ParseArguments<PackageOptions>(args);
+
             return await result.MapResult(
                 options => Execute(options),
                 errors => Task.FromResult(1));
@@ -77,6 +78,7 @@ namespace NugetUtility
                 {
                     Console.WriteLine();
                     Console.WriteLine("Project Reference(s) Analysis...");
+                    Console.WriteLine($"Collected licenses count is: {mappedLibraryInfo.Count}");
                     methods.PrintLicenses(mappedLibraryInfo);
                 }
 

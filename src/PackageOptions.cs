@@ -44,6 +44,9 @@ namespace NugetUtility
         [Option("outfile", Default = null, HelpText = "Output filename")]
         public string OutputFileName { get; set; }
 
+        [Option("sln-path", Default = null, HelpText = "Solution file path")]
+        public string SolutionFilePath { get; set; }
+
         [Option('f', "output-directory", Default = null, HelpText = "Output Directory")]
         public string OutputDirectory { get; set; }
 

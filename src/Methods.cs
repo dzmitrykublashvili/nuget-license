@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
@@ -36,6 +37,7 @@ namespace NugetUtility
         private readonly IReadOnlyDictionary<string, string> _licenseMappings;
         private readonly PackageOptions _packageOptions;
         private readonly XmlSerializer _serializer;
+        private readonly Dictionary<string, string> _solutionProjects = new();
 
         public static bool IgnoreSslCertificateErrorCallback(HttpRequestMessage message, System.Security.Cryptography.X509Certificates.X509Certificate2 cert, System.Security.Cryptography.X509Certificates.X509Chain chain, System.Net.Security.SslPolicyErrors sslPolicyErrors)
             => true;
@@ -76,11 +78,11 @@ namespace NugetUtility
                 }
                 else
                 {
-                _httpClient = new HttpClient(httpClientHandler)
-                {
-                    BaseAddress = new Uri(nugetUrl),
-                    Timeout = TimeSpan.FromSeconds(packageOptions.Timeout)
-                };
+                    _httpClient = new HttpClient(httpClientHandler)
+                    {
+                        BaseAddress = new Uri(nugetUrl),
+                        Timeout = TimeSpan.FromSeconds(packageOptions.Timeout)
+                    };
                 }
             }
 
@@ -350,12 +352,17 @@ namespace NugetUtility
 
         public async Task<Dictionary<string, PackageList>> GetPackages()
         {
+            if (_packageOptions.SolutionFilePath is not null)
+            {
+                await FillSolutionProjects();
+            }
+
             WriteOutput(() => $"Starting {nameof(GetPackages)}...", logLevel: LogLevel.Verbose);
             var licenses = new Dictionary<string, PackageList>();
-            var projectFiles = await GetValidProjects(_packageOptions.ProjectDirectory);
+            IEnumerable<string> projectFiles = await GetValidProjects(_packageOptions.ProjectDirectory);
             foreach (var projectFile in projectFiles)
             {
-                var references = this.GetProjectReferences(projectFile);
+                var references = GetProjectReferences(projectFile);
                 var referencedPackages = references.Select((package) =>
                 {
                     var split = package.Split(',', 2);
@@ -369,19 +376,41 @@ namespace NugetUtility
             return licenses;
         }
 
+        private async Task FillSolutionProjects()
+        {
+            var sln = await File.ReadAllTextAsync(_packageOptions.SolutionFilePath);
+            var regexProj = new Regex(@"Project\(""{.*}""\) = ""(.*)"", ""(.*\.csproj)"",");
+            var groups = regexProj.Matches(sln).Select(m => m.Groups);
+
+            var slnFolderPath = Path.GetDirectoryName(_packageOptions.SolutionFilePath);
+
+            foreach (var g in groups)
+            {
+                var projFileName = $"{g[1].Value}{Path.GetExtension(g[2].Value)}";
+                var projFilePath = $"{slnFolderPath}\\{g[2].Value}";
+                _solutionProjects[projFileName] = projFilePath;
+
+                if (!File.Exists(projFilePath))
+                {
+                    _solutionProjects.Remove(projFileName);
+                }
+            }
+        }
+
         public string[] GetProjectExtensions(bool withWildcard = false) =>
             withWildcard ?
             new[] { "*.csproj", "*.fsproj", "*.vbproj" } :
             new[] { ".csproj", ".fsproj", ".vbproj" };
 
         /// <summary>
-        /// Retreive the project references from csproj or fsproj file
+        /// Retrieves the project references from csproj or fsproj file
         /// </summary>
         /// <param name="projectPath">The Project Path</param>
         /// <returns></returns>
         public IEnumerable<string> GetProjectReferences(string projectPath)
         {
             WriteOutput(() => $"Starting {nameof(GetProjectReferences)}...", logLevel: LogLevel.Verbose);
+
             if (string.IsNullOrWhiteSpace(projectPath))
             {
                 throw new ArgumentNullException(projectPath);
@@ -416,7 +445,7 @@ namespace NugetUtility
             // Then try to get references from new project file format
             if (!references.Any())
             {
-                references = GetProjectReferencesFromNewProjectFile(projectPath);
+                references = GetLibraryReferencesFromNewProjectFile(projectPath).ToArray();
             }
 
             // Then if needed from old packages.config
@@ -745,11 +774,11 @@ namespace NugetUtility
         }
 
         /// <summary>
-        /// Retreive the project references from new csproj file format
+        /// Retreive the lib references from new csproj file format
         /// </summary>
         /// <param name="projectPath">The Project Path</param>
         /// <returns></returns>
-        private IEnumerable<string> GetProjectReferencesFromNewProjectFile(string projectPath)
+        private IEnumerable<string> GetLibraryReferencesFromNewProjectFile(string projectPath)
         {
             var projDefinition = XDocument.Load(projectPath);
 
@@ -758,6 +787,41 @@ namespace NugetUtility
                 .XPathSelectElements("/*[local-name()='Project']/*[local-name()='ItemGroup']/*[local-name()='PackageReference']")?
                 .Select(refElem => GetProjectReferenceFromElement(refElem)) ??
                 Array.Empty<string>();
+        }
+
+        private readonly HashSet<string> _projectsPaths = new();
+
+        /// <summary>
+        /// Retrieves the paths to referenced projects from new csproj file format
+        /// </summary>
+        /// <param name="projectPath">The Project Path</param>
+        /// <returns></returns>
+        private IEnumerable<string> GetReferencedProjectsPathsFromNewProjectFile(string projectPath)
+        {
+            var projectsPathsCollected = new HashSet<string>();
+
+            RecursionFillReferencedProjects(_solutionProjects[projectPath]);
+
+            void RecursionFillReferencedProjects(string projectPath)
+            {
+                var projDefinition = XDocument.Load(projectPath);
+
+                var projectsNames = projDefinition
+                    .XPathSelectElements("/*[local-name()='Project']/*[local-name()='ItemGroup']/*[local-name()='ProjectReference']")?
+                    .Select(refElem => GetProjectName(refElem)).ToArray();
+
+                var projectsPaths = projectsNames.Select(pn => _solutionProjects[pn]).ToHashSet();
+
+                foreach (var projPath in projectsPaths)
+                {
+                    projectsPathsCollected.Add(projPath);
+                    RecursionFillReferencedProjects(projPath);
+                }
+            }
+
+            projectsPathsCollected.Add(_solutionProjects[projectPath]);
+
+            return projectsPathsCollected;
         }
 
         private string GetProjectReferenceFromElement(XElement refElem)
@@ -774,6 +838,17 @@ namespace NugetUtility
                 .FirstOrDefault()?.Value ?? string.Empty;
 
             return $"{package},{version}";
+        }
+
+        private string GetProjectName(XElement refElem)
+        {
+            string relativePath = refElem.Attribute("Include")?.Value ?? string.Empty;
+
+            var lastIndOfSlash = relativePath.LastIndexOf('\\');
+
+            var name = relativePath[(lastIndOfSlash + 1) ..];
+
+            return name;
         }
 
         /// <summary>
@@ -841,23 +916,24 @@ namespace NugetUtility
         {
             var pathInfo = new FileInfo(projectPath);
             var extensions = GetProjectExtensions();
-            IEnumerable<string> validProjects;
+            List<string> validProjects;
             switch (pathInfo.Extension)
             {
                 case ".sln":
                     validProjects = (await ParseSolution(pathInfo.FullName))
                         .Select(p => new FileInfo(Path.Combine(pathInfo.Directory.FullName, p)))
                         .Where(p => p.Exists && extensions.Contains(p.Extension))
-                        .Select(p => p.FullName);
+                        .Select(p => p.FullName).ToList();
                     break;
                 case ".csproj":
-                    validProjects = new string[] { projectPath };
+                    // validProjects = new List<string>() { projectPath };
+                    validProjects = GetReferencedProjectsPathsFromNewProjectFile(projectPath).ToList();
                     break;
                 case ".fsproj":
-                    validProjects = new string[] { projectPath };
+                    validProjects = new List<string>() { projectPath };
                     break;
                 case ".vbproj":
-                    validProjects = new string[] { projectPath };
+                    validProjects = new List<string>() { projectPath };
                     break;
                 case ".json":
                     validProjects = ReadListFromFile<string>(projectPath)
@@ -865,11 +941,14 @@ namespace NugetUtility
                         .ToList();
                     break;
                 default:
-                    validProjects =
+                    var proj =
                         GetProjectExtensions(withWildcard: true)
                         .SelectMany(wildcardExtension =>
                            Directory.EnumerateFiles(projectPath, wildcardExtension, SearchOption.AllDirectories)
-                        );
+                        ).First();
+
+                    validProjects = GetReferencedProjectsPathsFromNewProjectFile(proj).ToList();
+
                     break;
             }
 
@@ -1186,6 +1265,9 @@ namespace NugetUtility
                 sb.Append("license Type:");
                 sb.Append(lib.LicenseType);
                 sb.AppendLine();
+                sb.Append("Copyright:");
+                sb.Append(lib.Copyright);
+                sb.AppendLine();
                 if (_packageOptions.IncludeProjectFile)
                 {
                     sb.Append("Project:");
@@ -1195,7 +1277,9 @@ namespace NugetUtility
                 sb.AppendLine();
             }
 
-            File.WriteAllText(GetOutputFilename("licenses.txt"), sb.ToString());
+            var filePath = GetOutputFilename("licenses.txt");
+            Console.WriteLine($"Saving results to the file {filePath}...");
+            File.WriteAllText(filePath, sb.ToString());
         }
 
         public void SaveAsMarkdown(List<LibraryInfo> libraries)
