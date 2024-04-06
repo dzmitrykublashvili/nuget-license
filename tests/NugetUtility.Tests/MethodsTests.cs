@@ -16,30 +16,30 @@ namespace NugetUtility.Tests
     public class MethodTests
     {
         private string _projectPath = @"../../../";
-        private Methods _methods;
+        private Extractor _extractor;
 
         public void AddMethods()
         {
-            _methods = new Methods(new PackageOptions { ProjectDirectory = _projectPath, Timeout = 10 });
+            _extractor = new Extractor(new PackageOptions { ProjectDirectory = _projectPath, Timeout = 10 });
         }
 
         private void AddUniquePackageOption()
         {
-            _methods = new Methods(new PackageOptions { UniqueOnly = true, ProjectDirectory = _projectPath });
+            _extractor = new Extractor(new PackageOptions { UniqueOnly = true, ProjectDirectory = _projectPath });
         }
 
         [Test]
         public void GetProjectExtension_Should_Be_CsprojOrFsProj()
         {
             AddMethods();
-            _methods.GetProjectExtensions().Should().Contain(".csproj", ".fsproj");
+            _extractor.GetProjectExtensions().Should().Contain(".csproj", ".fsproj");
         }
 
         [Test]
         public void GetProjectReferences_Should_Resolve_Projects()
         {
             AddMethods();
-            var packages = _methods.GetProjectReferences(_projectPath);
+            var packages = _extractor.GetLibraryReferencesFromProject(_projectPath);
 
             packages.Should().NotBeEmpty();
         }
@@ -48,9 +48,9 @@ namespace NugetUtility.Tests
         public async Task GetNugetInformationAsync_Should_Resolve_Projects()
         {
             AddMethods();
-            var packages = _methods.GetProjectReferences(_projectPath);
+            var packages = _extractor.GetLibraryReferencesFromProject(_projectPath);
             var referencedpackages = packages.Select(p => { var split = p.Split(","); return new PackageNameAndVersion { Name = split[0], Version = split[1] }; });
-            var information = await _methods.GetNugetInformationAsync(_projectPath, referencedpackages);
+            var information = await _extractor.GetNugetInformationAsync(_projectPath, referencedpackages);
 
             packages.Select(x => x.Split(',')[0].ToLower())
                 .Should()
@@ -64,7 +64,7 @@ namespace NugetUtility.Tests
             AddMethods();
             var packages = package.Split(';', StringSplitOptions.RemoveEmptyEntries);
             var referencedpackages = packages.Select(p => { var split = p.Split(","); return new PackageNameAndVersion { Name = split[0], Version = split[1] }; });
-            var information = await _methods.GetNugetInformationAsync(_projectPath, referencedpackages);
+            var information = await _extractor.GetNugetInformationAsync(_projectPath, referencedpackages);
 
             packages.Select(x => x.Split(',')[0])
                 .Should()
@@ -78,7 +78,7 @@ namespace NugetUtility.Tests
             AddMethods();
             var packages = package.Split(';', StringSplitOptions.RemoveEmptyEntries);
             var referencedpackages = packages.Select(p => { var split = p.Split(","); return new PackageNameAndVersion { Name = split[0], Version = split[1] }; });
-            var information = await _methods.GetNugetInformationAsync(_projectPath, referencedpackages);
+            var information = await _extractor.GetNugetInformationAsync(_projectPath, referencedpackages);
 
             packages.Select(x => x.Split(',')[0])
                 .Should()
@@ -120,7 +120,7 @@ namespace NugetUtility.Tests
 
             var packages = new Dictionary<string, PackageList>();
             packages.Add("packages", list);
-            var info = _methods.MapPackagesToLibraryInfo(packages);
+            var info = _extractor.MapPackagesToLibraryInfo(packages);
             info.Count.Should().Equals(1);
         }
 
@@ -130,7 +130,7 @@ namespace NugetUtility.Tests
 #pragma warning restore CS1998 // Async method lacks 'await' operators and will run synchronously
         {
 
-            var methods = new Methods(
+            var methods = new Extractor(
                 new PackageOptions
                 {
                     ProjectDirectory = _projectPath,
@@ -180,7 +180,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetPackages_ProjectsFilter_Should_Remove_Test_Projects()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectsFilterOption = @"../../../SampleProjectFilters.json",
                 ProjectDirectory = TestSetup.ThisProjectSolutionPath,
@@ -197,7 +197,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetPackages_PackagesFilter_Should_Remove_CommandLineParser()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 PackagesFilterOption = @"../../../SamplePackagesFilters.json",
                 ProjectDirectory = TestSetup.ThisProjectSolutionPath,
@@ -213,7 +213,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetPackages_RegexPackagesFilter_Should_Remove_CommandLineParser()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 PackagesFilterOption = "/CommandLine*/",
                 ProjectDirectory = TestSetup.ThisProjectSolutionPath,
@@ -229,7 +229,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetPackages_AllowedLicenses_Should_Throw_On_MIT()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectsFilterOption = @"../../../SampleProjectFilters.json",
                 AllowedLicenseTypesOption = @"../../../SampleAllowedLicenses.json",
@@ -247,7 +247,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetPackages_InputJson_Should_OnlyParseGivenProjects()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 AllowedLicenseTypesOption = @"../../../SampleAllowedLicenses.json",
                 ProjectDirectory = @"../../../SampleAllowedProjects.json",
@@ -265,7 +265,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task ValidateLicenses_ForbiddenLicenses_Should_Be_Invalid()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectsFilterOption = @"../../../SampleProjectFilters.json",
                 ForbiddenLicenseTypesOption = @"../../../SampleForbiddenLicenses.json",
@@ -288,7 +288,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task ValidateLicenses_AllowedLicenses_Should_Be_Invalid()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectsFilterOption = @"../../../SampleProjectFilters.json",
                 AllowedLicenseTypesOption = @"../../../SampleAllowedLicenses.json",
@@ -312,7 +312,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetProjectReferencesFromAssetsFile_Should_Resolve_Transitive_Assets()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 UseProjectAssetsJson = true,
                 IncludeTransitive = true,
@@ -343,7 +343,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task ExportLicenseTexts_Should_Export_File(string packageName, string packageVersion, string licenseUrl, string licenseType)
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectDirectory = _projectPath,
                 Timeout = 10,
@@ -369,7 +369,7 @@ namespace NugetUtility.Tests
         [Test]
         public async Task GetLicenceFromNpkgFile_Should_Return_False(string packageName, string licenseFile, string packageVersion)
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectDirectory = _projectPath,
                 Timeout = 10,
@@ -383,7 +383,7 @@ namespace NugetUtility.Tests
         [Test]
         public void HttpClient_IgnoreSslError_CallbackTest()
         {
-            Assert.True(Methods.IgnoreSslCertificateErrorCallback(null, null, null, System.Net.Security.SslPolicyErrors.None));
+            Assert.True(Extractor.IgnoreSslCertificateErrorCallback(null, null, null, System.Net.Security.SslPolicyErrors.None));
         }
 
         [TestCase("System.Linq", "(4.1.0,)")]
@@ -391,17 +391,17 @@ namespace NugetUtility.Tests
         [Test]
         public void HttpClient_IgnoreSslError_GetNugetInformationAsync(string package, string version)
         {
-            var methods = new Methods(new PackageOptions { ProjectDirectory = _projectPath, IgnoreSslCertificateErrors = true });
+            var methods = new Extractor(new PackageOptions { ProjectDirectory = _projectPath, IgnoreSslCertificateErrors = true });
 
             var referencedpackages = new PackageNameAndVersion[] { new PackageNameAndVersion { Name = package, Version = version } };
 
-            Assert.DoesNotThrowAsync(async () => await _methods.GetNugetInformationAsync(_projectPath, referencedpackages));
+            Assert.DoesNotThrowAsync(async () => await _extractor.GetNugetInformationAsync(_projectPath, referencedpackages));
         }
 
         [Test]
         public async Task GetPackages_ShouldSupportPackageReferencesWithVersionRange()
         {
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
             {
                 ProjectDirectory = "../../../TestProjectFiles/PackageRangeReference.csproj",
                 Timeout = 10

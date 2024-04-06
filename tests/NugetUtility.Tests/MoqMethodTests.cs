@@ -48,7 +48,7 @@ namespace NugetUtility.Tests
 
 
 
-            var methods = new Methods(new PackageOptions
+            var methods = new Extractor(new PackageOptions
 
             {
 
