@@ -10,13 +10,53 @@ using static NugetUtility.Helpers.ConsoleLogHelper;
 
 namespace NugetUtility.Helpers;
 
-internal class FileSystemHelper
+internal class ResultsExporter
 {
     private readonly PackageOptions _packageOptions;
+    private List<LibraryInfo> _libraries;
 
-    public FileSystemHelper(PackageOptions packageOptions)
+
+    public ResultsExporter(PackageOptions packageOptions, List<LibraryInfo> libraries)
     {
         _packageOptions = packageOptions;
+        _libraries = libraries;
+    }
+
+    public async Task ExportResults()
+    {
+        if (!_libraries.Any())
+        {
+            Console.WriteLine("No libraries extracted.");
+            return;
+        }
+
+        if (_packageOptions.Print == true)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"Collected licenses count is: {_libraries.Count}");
+            Console.WriteLine("Project Reference(s) Analysis...");
+            PrintLicenses(_libraries);
+        }
+
+        if (File.Exists(_packageOptions.MergeJsonFilePath))
+        {
+            _libraries = await MergeLibrariesWithLibrariesFromJsonFile(_libraries, _packageOptions.MergeJsonFilePath);
+        }
+
+        if (_packageOptions.JsonOutput)
+        {
+            await SaveAsJson(_libraries);
+        }
+
+        if (_packageOptions.MarkDownOutput)
+        {
+            await SaveAsMarkdown(_libraries);
+        }
+
+        if (_packageOptions.TextOutput)
+        {
+            await SaveAsTextFile(_libraries);
+        }
     }
 
     public static async Task<List<LibraryInfo>> MergeLibrariesWithLibrariesFromJsonFile(List<LibraryInfo> libraries, string jsonFilePath)
@@ -44,7 +84,7 @@ internal class FileSystemHelper
             return;
         }
 
-        JsonSerializerSettings jsonSettings = new JsonSerializerSettings
+        var jsonSettings = new JsonSerializerSettings
         {
             NullValueHandling = _packageOptions.IncludeProjectFile ? NullValueHandling.Include : NullValueHandling.Ignore,
             Formatting = Formatting.Indented
@@ -59,8 +99,12 @@ internal class FileSystemHelper
 
     public async Task SaveAsTextFile(List<LibraryInfo> libraries)
     {
-        if (!libraries.Any() || !_packageOptions.TextOutput) { return; }
-        StringBuilder sb = new StringBuilder(256);
+        if (!libraries.Any())
+        {
+            return;
+        }
+
+        var sb = new StringBuilder(256);
 
         foreach (var lib in libraries)
         {
@@ -103,11 +147,14 @@ internal class FileSystemHelper
 
     public async Task SaveAsMarkdown(List<LibraryInfo> libraries)
     {
-        if (libraries is null) { throw new ArgumentNullException(nameof(libraries)); }
-        if (!libraries.Any()) { return; }
+        if (!libraries.Any())
+        {
+            return;
+        }
 
         WriteOutput(Environment.NewLine + "References:", logLevel: LogLevel.Always);
-        var output = (libraries.ToStringTable(new[] { "Reference", "Version", "License Type", "License" }, true,
+
+        var output = (libraries.ToStringTable(["Reference", "Version", "License Type", "License"], true,
             a => a.PackageName ?? "---",
             a => a.PackageVersion ?? "---",
             a => a.LicenseType ?? "---",
@@ -116,21 +163,15 @@ internal class FileSystemHelper
         await File.WriteAllTextAsync(GetOutputFilename("licenses.md"), output.Item1);
     }
 
-    public string GetExportDirectory()
+    private string GetExportDirectory()
     {
-        string outputDirectory = string.Empty;
+        var outputDirectory = string.Empty;
 
         if (!string.IsNullOrWhiteSpace(_packageOptions.OutputDirectory))
         {
-            if (_packageOptions.OutputDirectory.EndsWith('/'))
-            {
-                outputDirectory = Path.GetDirectoryName(_packageOptions.OutputDirectory);
-            }
-            else
-            {
-                outputDirectory = Path.GetDirectoryName(_packageOptions.OutputDirectory + "/");
-
-            }
+            outputDirectory = _packageOptions.OutputDirectory.EndsWith('/') 
+                ? Path.GetDirectoryName(_packageOptions.OutputDirectory) 
+                : Path.GetDirectoryName(_packageOptions.OutputDirectory + "/");
 
             if (!Directory.Exists(outputDirectory))
             {
@@ -144,10 +185,10 @@ internal class FileSystemHelper
 
     private string GetOutputFilename(string defaultName)
     {
-        string outputDir = GetExportDirectory();
+        var outputDir = GetExportDirectory();
 
-        return string.IsNullOrWhiteSpace(_packageOptions.OutputFileName) ?
-            Path.Combine(outputDir, defaultName) :
-            Path.Combine(outputDir, _packageOptions.OutputFileName);
+        return string.IsNullOrWhiteSpace(_packageOptions.OutputFileName) 
+            ? Path.Combine(outputDir, defaultName) 
+            : Path.Combine(outputDir, _packageOptions.OutputFileName);
     }
 }

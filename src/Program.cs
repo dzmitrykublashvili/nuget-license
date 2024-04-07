@@ -1,7 +1,6 @@
 ﻿using CommandLine;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using NugetUtility.Exceptions;
@@ -32,34 +31,7 @@ public class Program
 
             libraries = await ProcessLicenses(libraries, options);
 
-            if (options.Print == true)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"Collected licenses count is: {libraries.Count}");
-                Console.WriteLine("Project Reference(s) Analysis...");
-                ConsoleLogHelper.PrintLicenses(libraries);
-            }
-
-            var saverHelper = new FileSystemHelper(options);
-
-            if (File.Exists(options.MergeJsonFilePath))
-            {
-                libraries = await FileSystemHelper.MergeLibrariesWithLibrariesFromJsonFile(libraries,
-                    options.MergeJsonFilePath);
-            }
-
-            if (options.JsonOutput)
-            {
-                await saverHelper.SaveAsJson(libraries);
-            }
-            else if (options.MarkDownOutput)
-            {
-                await saverHelper.SaveAsMarkdown(libraries);
-            }
-            else
-            {
-                await saverHelper.SaveAsTextFile(libraries);
-            }
+            await new ResultsExporter(options, libraries).ExportResults();
 
             return 0;
         }
