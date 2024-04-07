@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace NugetUtility
+namespace NugetUtility.Models
 {
     public interface IValidationResult<T>
     {

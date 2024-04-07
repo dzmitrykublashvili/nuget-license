@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
-namespace NugetUtility
+namespace NugetUtility.Helpers
 {
     //https://stackoverflow.com/questions/856845/how-to-best-way-to-draw-table-in-console-app-c
     public static class TableParser
@@ -15,7 +15,7 @@ namespace NugetUtility
           bool asMarkDown,
           params Func<T, object>[] valueSelectors)
         {
-            return ToStringTable(values.ToArray(), columnHeaders, asMarkDown, valueSelectors);
+            return values.ToArray().ToStringTable(columnHeaders, asMarkDown, valueSelectors);
         }
 
         public static string ToStringTable<T>(
@@ -45,11 +45,11 @@ namespace NugetUtility
             }
             if (asMarkDown)
             {
-                return ToMarkdownTable(arrValues);
+                return arrValues.ToMarkdownTable();
             }
             else
             {
-                return ToStringTable(arrValues);
+                return arrValues.ToStringTable();
             }
         }
 
@@ -112,7 +112,7 @@ namespace NugetUtility
                     for (int colIndex = 0; colIndex < arrValues.GetLength(1); colIndex++)
                     {
                         // Print cell
-                        string cell = new String('-', maxColumnsWidth[colIndex]);
+                        string cell = new string('-', maxColumnsWidth[colIndex]);
                         cell = cell.PadRight(maxColumnsWidth[colIndex]);
                         sb.Append(" | ");
                         sb.Append(cell);

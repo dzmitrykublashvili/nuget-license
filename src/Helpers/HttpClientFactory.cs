@@ -2,7 +2,7 @@
 using System.Net;
 using System.Net.Http;
 
-namespace NugetUtility;
+namespace NugetUtility.Helpers;
 
 internal static class HttpClientFactory
 {

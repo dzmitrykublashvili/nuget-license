@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
+using NugetUtility.Models;
 using static NugetUtility.Helpers.ConsoleLogHelper;
 using static NugetUtility.Utilities;
 

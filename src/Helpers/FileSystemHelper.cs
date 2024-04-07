@@ -1,23 +1,43 @@
 ﻿using Newtonsoft.Json;
+using NugetUtility.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using static NugetUtility.Helpers.ConsoleLogHelper;
 
 namespace NugetUtility.Helpers;
 
-internal class SaverHelper
+internal class FileSystemHelper
 {
     private readonly PackageOptions _packageOptions;
 
-    public SaverHelper(PackageOptions packageOptions)
+    public FileSystemHelper(PackageOptions packageOptions)
     {
         _packageOptions = packageOptions;
     }
 
-    public void SaveAsJson(List<LibraryInfo> libraries)
+    public static async Task<List<LibraryInfo>> MergeLibrariesWithLibrariesFromJsonFile(List<LibraryInfo> libraries, string jsonFilePath)
+    {
+        var str = await File.ReadAllTextAsync(jsonFilePath);
+        var libsToMerge = JsonConvert.DeserializeObject(str, typeof(List<LibraryInfo>)) as List<LibraryInfo>;
+
+        libsToMerge?.ForEach(l =>
+        {
+            if (!libraries.Any(presentedLib => presentedLib.PackageName == l.PackageName && presentedLib.PackageVersion == l.PackageVersion))
+            {
+                libraries.Add(l);
+            }
+        });
+
+        libraries = libraries.OrderBy(l => l.PackageName).ToList();
+
+        return libraries;
+    }
+
+    public async Task SaveAsJson(List<LibraryInfo> libraries)
     {
         if (!libraries.Any())
         {
@@ -26,19 +46,22 @@ internal class SaverHelper
 
         JsonSerializerSettings jsonSettings = new JsonSerializerSettings
         {
-            NullValueHandling = _packageOptions.IncludeProjectFile ? NullValueHandling.Include : NullValueHandling.Ignore
+            NullValueHandling = _packageOptions.IncludeProjectFile ? NullValueHandling.Include : NullValueHandling.Ignore,
+            Formatting = Formatting.Indented
         };
 
-        using var fileStream = new FileStream(GetOutputFilename("licenses.json"), FileMode.Create);
-        using var streamWriter = new StreamWriter(fileStream);
-        streamWriter.Write(JsonConvert.SerializeObject(libraries, jsonSettings));
-        streamWriter.Flush();
+        await using var fileStream = new FileStream(GetOutputFilename("licenses.json"), FileMode.Create);
+        await using var streamWriter = new StreamWriter(fileStream);
+
+        await streamWriter.WriteAsync(JsonConvert.SerializeObject(libraries, typeof(List<LibraryInfo>), jsonSettings));
+        await streamWriter.FlushAsync();
     }
 
-    public void SaveAsTextFile(List<LibraryInfo> libraries)
+    public async Task SaveAsTextFile(List<LibraryInfo> libraries)
     {
         if (!libraries.Any() || !_packageOptions.TextOutput) { return; }
         StringBuilder sb = new StringBuilder(256);
+
         foreach (var lib in libraries)
         {
             sb.Append(new string('#', 100));
@@ -75,10 +98,10 @@ internal class SaverHelper
 
         var filePath = GetOutputFilename("licenses.txt");
         Console.WriteLine($"Saving results to the file {filePath}...");
-        File.WriteAllText(filePath, sb.ToString());
+        await File.WriteAllTextAsync(filePath, sb.ToString());
     }
 
-    public void SaveAsMarkdown(List<LibraryInfo> libraries)
+    public async Task SaveAsMarkdown(List<LibraryInfo> libraries)
     {
         if (libraries is null) { throw new ArgumentNullException(nameof(libraries)); }
         if (!libraries.Any()) { return; }
@@ -90,7 +113,7 @@ internal class SaverHelper
             a => a.LicenseType ?? "---",
             a => a.LicenseUrl ?? "---"), logLevel: LogLevel.Always);
 
-        File.WriteAllText(GetOutputFilename("licenses.md"), output.Item1);
+        await File.WriteAllTextAsync(GetOutputFilename("licenses.md"), output.Item1);
     }
 
     public string GetExportDirectory()

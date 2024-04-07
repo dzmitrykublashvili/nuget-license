@@ -8,6 +8,7 @@ using CommandLine.Text;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using NUnit.Framework;
+using NugetUtility.Models;
 
 namespace NugetUtility.Tests
 {

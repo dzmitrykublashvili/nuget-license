@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
-namespace NugetUtility
+namespace NugetUtility.Helpers
 {
     public class HtmlPrinter
     {
@@ -155,7 +155,7 @@ namespace NugetUtility
 
                     break;
                 case HtmlNodeType.Text:
-                    PrintText((HtmlTextNode) node);
+                    PrintText((HtmlTextNode)node);
                     break;
             }
         }

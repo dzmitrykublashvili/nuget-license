@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using NugetUtility.Models;
 using System;
 using System.Collections.Generic;
 using System.IO;

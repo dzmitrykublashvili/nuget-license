@@ -2,7 +2,7 @@
   "profiles": {
     "NugetUtility": {
       "commandName": "Project",
-      "commandLineArgs": " -i IndexingManager.csproj --sln-path C:\\PROJECTS\\INDEXING-MANAGER\\gf-connectors.indexing-manager\\IndexingManager.sln -o -u -f C:\\\\My_Strories\\\\PIPELINES"
+      "commandLineArgs": " -i IndexingManager.csproj --sln-path C:\\PROJECTS\\INDEXING-MANAGER\\gf-connectors.indexing-manager\\IndexingManager.sln -j -u -f C:\\\\My_Strories\\\\PIPELINES --merge-json C:\\My_Strories\\PIPELINES\\licenses2.json"
     },
     "WSL": {
       "commandName": "WSL2",

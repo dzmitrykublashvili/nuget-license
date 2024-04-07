@@ -3,9 +3,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Threading.Tasks;
 using FluentAssertions;
+using NugetUtility.Models;
 using NUnit.Framework;
 
-namespace NugetUtility.Tests {
+namespace NugetUtility.Tests
+{
     [ExcludeFromCodeCoverage]
     [TestFixture]
     public class ProgramTests {

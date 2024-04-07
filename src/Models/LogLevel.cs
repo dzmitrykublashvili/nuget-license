@@ -1,4 +1,4 @@
-﻿namespace NugetUtility
+﻿namespace NugetUtility.Models
 {
     public enum LogLevel
     {

@@ -36,8 +36,4 @@
 		</AssemblyAttribute>
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Folder Include="Validators\" />
-	</ItemGroup>
-
 </Project>
